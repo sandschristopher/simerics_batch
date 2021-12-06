@@ -1,0 +1,20 @@
+[ProgramPath]
+	Simerics = C:/Program Files/Simerics/SimericsMP.exe
+
+[PreProcessing]
+	MeshGeometry = True
+	runTransient = False
+	batchVar = vflow_out
+	batchVarData = relative
+	batchVarValues = 0.55 0.70 0.85 1.00 1.15 1.30 1.45
+
+[steady]
+	BaseName = AP_nq120_steady
+	AveragingWindow = 50
+	
+[transient]
+	BaseName = AP_nq120_transient
+	AveragingWindow = 120
+
+[PostProcessing]
+	FlowQuantities = DPtt Eff_tt
