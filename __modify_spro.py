@@ -52,6 +52,19 @@ def modify_spro(spro_file):
             if "#Outlet" in line:
                 indent = " " * (len(line) - len(line.lstrip(" ")))
                 break
+     
+    # Ensure grid file consistency between steady-state and transient simulations
+    with open(spro_file, 'r') as infile:
+        data = infile.readlines()
+        for line_number, line in enumerate(data):
+            if ".sgrd" in line:
+                data[line_number] = line.replace("transient", "steady")
+                break
+     
+    with open(spro_file, 'w') as outfile:
+        data = "".join(data)
+        outfile.write(data)
+        
     
     def insert_line(addition):
 
@@ -74,15 +87,6 @@ def modify_spro(spro_file):
             with open(spro_file, 'w') as outfile:
                 data = "".join(data)
                 outfile.write(data)
-        
-    stage_components = [2, 3]
-
-    '''
-
-    stage_components.append(int(input("Enter the number associated with the initial stage component: ")))
-    stage_components.append(int(input("Enter the number associated with the final stage component: ")))
-
-    '''
 
     insert_line(indent + "#head [m]" + "\n" + indent + "plot.H = plot.DPtt/rho/9.81 \n" + indent + "#plot.H:head [m]")
 
