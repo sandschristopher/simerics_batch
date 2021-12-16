@@ -5,8 +5,10 @@ from decimal import Decimal
 import os
 import subprocess
 import time
+import pandas as pd
+from __modify_spro import *
 
-def Get_ConfigValue(ConfigSection,ConfigKey):                                                       # Function to retrieve values from the INI file structure
+def Get_ConfigValue(ConfigSection, ConfigKey):                                                      # Function to retrieve values from the INI file structure
     ConfigValue = CFconfig[ConfigSection][ConfigKey]
     return ConfigValue
 
@@ -24,7 +26,7 @@ def Print_Runtime(time_start):                                                  
 
 def SMP_Solver(SMP_Args):                                                                           # Function that will call Simerics
     SMP_Cli=[os.path.sep.join(Get_ConfigValue('ProgramPath','Simerics').split("/"))]
-    [SMP_Cli.append(item) for item in SMP_Args]                                                              # Create Simerics batch call e.g. Simerics.exe CP_nq31.spro -saveAs CP_nq31
+    [SMP_Cli.append(item) for item in SMP_Args]                                                     # Create Simerics batch call e.g. Simerics.exe CP_nq31.spro -saveAs CP_nq31
     time_start = time.time()                                                                        # Set start timer 
     startupinfo = subprocess.STARTUPINFO()                                                          # Configure startupinfo for Simerics run without solver pop-up windows
     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -35,10 +37,11 @@ def SMP_Solver(SMP_Args):                                                       
     time_elapsed = Print_Runtime(time_start)                                                        # Return Simerics solver wall clock time
     return time_elapsed
 
-def Create_SPRO(baseName):                                                                          # Function to create spro files based on different batch variable values from the INI file structure
+def Create_SPRO(baseName, stage_components):                                                        # Function to create spro files based on different batch variable values from the INI file structure
+    modify_spro(baseName + '.spro', stage_components)                                               # Modifies the base spro file and adds additional user-defined parameters 
     baseName_List = []                                                                              # Create empty list that will be filled with file names containing basename + operation point
-    if Get_ConfigValue('PreProcessing','batchVarData').lower() == 'relative':                       # Check if batchVar_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
-        with open(baseName + '.spro','r') as infile:                                                # Get reference value of batch variable from spro file 
+    if Get_ConfigValue('PreProcessing', 'batchVarData').lower() == 'relative':                      # Check if batchVar_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
+        with open(baseName + '.spro', 'r') as infile:                                               # Get reference value of batch variable from spro file 
             for line in infile:                                                                     # Parse spro file line by line
                 if (batchVar_Name + " = ") in line:                                                 # Search for expression for batch_VarName
                     batchVar_DesignPoint = line.split(" ")[-1]                                      # Retrieve original batch variable value
@@ -76,7 +79,7 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_List, batchVa
                 result_Dict[batchVar_Name] += Decimal(batchVar_ValuesAbs[baseName_Index])           # Search for batchVar_Name in result_Dict, if exists, add value to existing value
             else:
                 result_Dict[batchVar_Name] = Decimal(batchVar_ValuesAbs[baseName_Index])            # Search for batchVar_Name in result_Dict, if not exists, set key value to batchVar_Name value
-            for key,value in row.items():
+            for key, value in row.items():
                 if 'userdef.' in key:                                                               # Search for userdef expressions in result_Dict
                     if key in result_Dict:                                                           
                         result_Dict[key] += Decimal(value)                                          # Search for userdef expressions in result_Dict, if exists, add value to existing value        
@@ -86,36 +89,37 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_List, batchVa
                 result_Dict['WallClockTime'] += Decimal(time_elapsed)                               # Search for batchVar_Name in result_Dict, if exists, add value to existing value
             else:
                 result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar_Name in result_Dict, if not exists, set key value to batchVar_Name value
-        for key,value in result_Dict.items():
+        for key, value in result_Dict.items():
               result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
-    with open (baseName + '_integrals.csv','a+',newline='') as outfile:                             
-        writer = csv.DictWriter(outfile, fieldnames=result_Dict.keys(), delimiter="\t")             # Use DictWriter to write averaged results from result_Dict in CSV file
+    with open (baseName + '_integrals.csv', 'a+', newline='') as outfile:                             
+        writer = csv.DictWriter(outfile, fieldnames=result_Dict.keys(), delimiter=",")              # Use DictWriter to write averaged results from result_Dict in CSV file
         if baseName_Index == 0:                                                          
             writer.writeheader()                                                                    # For first CFD run also write a header row, after that, don't
         writer.writerow(result_Dict)
     Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis)
     
-def Run_CFD(analysis, SteadyState):                                                                 # Function that calls the CFD solver
-    baseName = Get_ConfigValue(analysis,'BaseName')                                                 # Get base name for CFD run, depends on steady-state or transient CFD run
-    avgWindow = int(Get_ConfigValue(analysis,'AveragingWindow'))                                    # Get averaging window for post-processing, depends on steady-state or transient
-    if Get_ConfigValue('PreProcessing','MeshGeometry').lower() == 'true':                           # Run meshing function if meshing was enabled in the INI file structure
-        SMP_Args = [baseName + '.spro', "-saveAs", baseName]                                        # Create arguments for meshing run
+def Run_CFD(analysis, stage_components, SteadyState):                                               # Function that calls the CFD solver
+    baseName = Get_ConfigValue(analysis, 'BaseName')                                                # Get base name for CFD run, depends on steady-state or transient CFD run
+    avgWindow = int(Get_ConfigValue(analysis, 'AveragingWindow'))                                   # Get averaging window for post-processing, depends on steady-state or transient
+    if Get_ConfigValue('PreProcessing', 'MeshGeometry').lower() == 'true':                          # Run meshing function if meshing was enabled in the INI file structure
+        SMP_Args = [baseName + '.spro', " -saveAs ", baseName]                                      # Create arguments for meshing run
         SMP_Solver(SMP_Args)                                                                        # Start Simerics meshing run
-    baseName_List, batchVar_ValuesAbs = Create_SPRO(baseName)                                       # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
+    baseName_List, batchVar_ValuesAbs = Create_SPRO(baseName, stage_components)                     # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
     for baseName_Index, baseName_Item in enumerate(baseName_List):                                  # Iterate through list with all operation points
         SMP_Args = ["-run", baseName_Item + '.spro']                                                # Create arguments for solver run
         if analysis == 'steady' and baseName_Index != 0:                                            # Continue from previous CFD results if run is steady-state analysis and not first solver run
             SMP_Args.append(baseName_List[baseName_Index - 1] + '.sres')                            # Append arguments to start from previous steady-state CFD result
         elif analysis == 'transient':                                                               # Start from steady-state solution if analysis type is transient
             SMP_Args.append(SteadyState[baseName_Index] + '.sres')                                  # Append arguments to start from steady-state CFD result
-        time_elapsed = SMP_Solver(SMP_Args)                                                                      # Start Simerics solver run
+        time_elapsed = SMP_Solver(SMP_Args)                                                         # Start Simerics solver run
         Eval_Results(baseName, baseName_Item, baseName_Index, baseName_List, batchVar_ValuesAbs, avgWindow, analysis, time_elapsed)
     return baseName_List
+
 
 def Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis):                     # Function that fills the results.html
     HTML_Dict = {}
     with open (baseName + '_integrals.csv','r') as infile:
-        reader = csv.DictReader(infile, delimiter="\t")
+        reader = csv.DictReader(infile, delimiter=",")
         for row in reader:
             for item in flowQuantities:
                 if item not in HTML_Dict:
@@ -161,12 +165,19 @@ def Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis): 
             outfile.write(line)
 
 def main():
-    time_start = time.time()                                                                        # Set start timer for whole all CFD runs       
-    if Get_ConfigValue('PreProcessing','runTransient').lower() == 'true':                            # Check if transient run is configured
-        BaseNameListSteady = Run_CFD('steady',SteadyState=None)                                     # Run steady-state analysis first, get list with basenames that contain operation points (will be used for .sres file names)
-        Run_CFD('transient',BaseNameListSteady)                                                     # Run transient analysis                       
+
+    stage_components = []
+    stage_components.append(int(input("Enter the number associated with the initial stage component: ")))
+    stage_components.append(int(input("Enter the number associated with the final stage component: ")))
+    
+    time_start = time.time()                                                                         # Set start timer for whole all CFD runs       
+    
+    if Get_ConfigValue('PreProcessing', 'runTransient').lower() == 'true':                           # Check if transient run is configured
+        BaseNameListSteady = Run_CFD('steady', stage_components, SteadyState=None)                   # Run steady-state analysis first, get list with basenames that contain operation points (will be used for .sres file names)
+        Run_CFD('transient', stage_components, BaseNameListSteady)                                   # Run transient analysis                       
     else:
-        Run_CFD('steady',SteadyState=None)                                                          # Run steady-state analysis
+        Run_CFD('steady', stage_components, SteadyState=None)                                        # Run steady-state analysis
+    
     Print_Runtime(time_start)
 
 main()
