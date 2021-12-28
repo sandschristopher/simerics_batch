@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>CFturbo Post-Processing</title>
+		<meta http-equiv="refresh" content="10" >
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.1/chart.min.js"></script>
+		<style>
+		body {
+		  font-family: Helvetica Neue, Arial, sans-serif;
+		  text-align: center;
+		}
+
+		.wrapper {
+		  max-width: 800px;
+		  margin: 50px auto;
+		}
+
+		h1 {
+		  font-weight: 200;
+		  font-size: 2em;
+		  margin: 0 0 0.1em 0;
+		}
+
+		h2 {
+		  font-weight: 200;
+		  font-size: 1em;
+		  margin: 0 0 50px;
+		  color: #999;
+		}
+
+		a {
+		  margin-top: 50px;
+		  display: block;
+		  color: #3e95cd;
+		}
+		</style>
+    </head>
+<body>
+    <div style="width: 2600px">
+        <div style="float: left; width: 810px">
+            <h1>QOI_1_NAME</h1>
+            <h2>QOI_1_DESCRIPTION</h2>
+            <canvas id="QOI1" height="350"></canvas>
+        </div>
+        <div style="float: left; width: 810px">
+            <h1>QOI_2_NAME</h1>
+            <h2>QOI_2_DESCRIPTION</h2>
+            <canvas id="QOI2" height="350"></canvas>
+			<br style="clear: left;" />
+			<br style="clear: left;" />
+			<br style="clear: left;" />
+			<h1>SIMULATION NOT STARTED</h1>
+        </div>
+        <div style="float: left; width: 810px">
+            <h1>QOI_3_NAME</h1>
+            <h2>QOI_3_DESCRIPTION</h2>
+            <canvas id="QOI3" height="350"></canvas>
+        </div>
+        <br style="clear: left;" />
+    </div>
+    <script>
+    var batchVarName = [];
+    var QOI_1_steady = [];
+    var QOI_1_transient = [];
+    var QOI_2_steady = [];
+    var QOI_2_transient = [];
+    var QOI_3_steady = [];
+    var QOI_3_transient = [];
+
+    var ctx = document.getElementById("QOI1");
+    var QOI1 = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: batchVarName,
+        datasets: [
+          { 
+            data: QOI_1_steady,
+            label: "steady-state",
+            borderColor: "lightblue",
+            fill: false
+          },
+          { 
+            data: QOI_1_transient,
+            label: "transient",
+            borderColor: "blue",
+            fill: false
+          }
+        ]
+      }
+    })
+    var ctx = document.getElementById("QOI2");
+    var QOI2 = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: batchVarName,
+        datasets: [
+          { 
+            data: QOI_2_steady,
+            label: "steady-state",
+            borderColor: "lightgreen",
+            fill: false
+          },
+          { 
+            data: QOI_2_transient,
+            label: "transient",
+            borderColor: "green",
+            fill: false
+          }
+        ]
+      }
+    });  
+    var ctx = document.getElementById("QOI3");
+    var QOI3 = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: batchVarName,
+        datasets: [
+          { 
+            data: QOI_3_steady,
+            label: "steady-state",
+            borderColor: "coral",
+            fill: false
+          },
+          { 
+            data: QOI_3_transient,
+            label: "transient",
+            borderColor: "red",
+            fill: false
+          }
+        ]
+      }
+    });    
+    </script>
+  </body>
+</html>
