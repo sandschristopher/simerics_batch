@@ -140,8 +140,10 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
 
     flowQOI = Get_FlowQuantityDescription(baseName)[0]
 
-    if baseName_Item == baseName_Array[0][0]:
-        with open ('__results.html','r') as infile, open('__' + baseName + '_results.html','w') as outfile:
+    name = str(baseName.split("_")[0] + "_" + baseName.split("_")[1])
+
+    if baseName_Item == baseName_Array[0][0] and analysis == analysis == 'steady':
+        with open ('__results.html','r') as infile, open('__' + name + '_results.html','w') as outfile:
             data = infile.readlines()
             for line_number, line in enumerate(data):
                 if "var batchVarName = [];" in line:
@@ -170,14 +172,14 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
                 else:
                     outfile.write(line)
 
-    if baseName_Array.shape[0] > 1:
-        with open('__' + baseName + '_results.html','r') as infile:
+    if baseName_Array.shape[0] > 1 and baseName_Item == baseName_Array[0][0] and analysis == 'steady':
+        with open('__' + name + '_results.html','r') as infile:
             data = infile.readlines()
             for line_number, line in enumerate(data):
                 if "data: QOI_" in line and "_transient1" in line:
                     data[line_number + 4] = data[line_number + 4].replace("}", "},")
 
-        with open('__' + baseName + '_results.html','w') as outfile:
+        with open('__' + name + '_results.html','w') as outfile:
             outfile.writelines(data)
 
     HTML_Dict = {}
@@ -186,7 +188,6 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
         reader = csv.DictReader(infile, delimiter=",")
         for row in reader:
             if row[batchVar1_Name] == str(batchVar1_ValuesAbs[baseName_Row]):
-                print("match!")
                 for item in flowQuantities:
                     if item not in HTML_Dict:
                         HTML_Dict[item] = []
@@ -198,8 +199,8 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
                     HTML_Dict[batchVar2_Name] = []
                 HTML_Dict[batchVar2_Name].append(row[batchVar2_Name])
     
-    HTML_infile = '__' + baseName + '_results.html'
-    HTML_outfile = '__' + baseName + '_results.html'
+    HTML_infile = '__' + name + '_results.html'
+    HTML_outfile = '__' + name + '_results.html'
 
     with open(HTML_infile, 'r') as infile: 
         output = []
@@ -219,11 +220,10 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
             elif "var QOI_" in line and analysis + str(baseName_Row + 1) in line:
                 for index, item in enumerate(flowQuantities):
                     if (str(index + 1) + "_" + analysis + str(baseName_Row + 1) + " = ") in line:
-                        print(line)
                         output.append("\t\tvar QOI_" + str(index + 1) + "_" + analysis +  str(baseName_Row + 1) + " = " + str(HTML_Dict[item]) + ";\n")
             elif ("var batchVarName = ") in line and analysis == 'steady' and baseName_Row == 0:
                 output.append("\t\tvar batchVarName = " + str(HTML_Dict[batchVar2_Name]) + ";\n")
-            elif ((analysis == 'steady' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'false') or (analysis == 'transient' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'true')) and (baseName_Index == (len(baseName_Array[0]) - 1)):
+            elif ((analysis == 'steady' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'false') or (analysis == 'transient' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'true')) and (baseName_Item == baseName_Array.flat[-1]):
                 if "<h1>SIMULATION RUNNING ...</h1>" in line:
                     output.append("			<h1>SIMULATION FINISHED</h1>" + "\n")
                 elif "		<meta http-equiv" in line:
