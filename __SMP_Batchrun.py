@@ -1,3 +1,5 @@
+import numpy as np
+from shutil import copy, copyfile
 import configparser
 import csv
 import decimal
@@ -5,7 +7,6 @@ from decimal import Decimal
 import os
 import subprocess
 import time
-import pandas as pd
 from __modify_spro import *
 
 def Get_ConfigValue(ConfigSection, ConfigKey):                                                      # Function to retrieve values from the INI file structure
@@ -14,8 +15,10 @@ def Get_ConfigValue(ConfigSection, ConfigKey):                                  
 
 CFconfig = configparser.ConfigParser()                                                              # Initialize Config
 CFconfig.read('__Runconfig.cftconf')                                                                # Read Config
-batchVar_Name = Get_ConfigValue('PreProcessing','batchVar')                                         # Get name of batch variable
-batchVar_Values = Get_ConfigValue('PreProcessing','batchVarValues').split(" ")                      # Get values for batch variable, format the as a list by splitting
+batchVar1_Name = Get_ConfigValue('PreProcessing','batchVar1')                                         # Get name of batch variable
+batchVar1_Values = Get_ConfigValue('PreProcessing','batchVar1Values').split(" ")                      # Get values for batch variable, format the as a list by splitting
+batchVar2_Name = Get_ConfigValue('PreProcessing','batchVar2')   
+batchVar2_Values = Get_ConfigValue('PreProcessing','batchVar2Values').split(" ") 
 flowQuantities = ['userdef.' + item for item in Get_ConfigValue('PostProcessing','FlowQuantities').split(" ")]    # Get floq quantities for post-processing
 decimal.getcontext().prec = 9                                                                       # Set user alterable precision to 9 places e.g. 0.142857143
 
@@ -38,25 +41,35 @@ def SMP_Solver(SMP_Args):                                                       
     return time_elapsed
 
 def Create_SPRO(baseName, stage_components):                                                        # Function to create spro files based on different batch variable values from the INI file structure
-    modify_spro(baseName + '.spro', stage_components)                                               # Modifies the base spro file and adds additional user-defined parameters 
+    modify_spro(baseName + '.spro', stage_components)  
     baseName_List = []                                                                              # Create empty list that will be filled with file names containing basename + operation point
-    if Get_ConfigValue('PreProcessing', 'batchVarData').lower() == 'relative':                      # Check if batchVar_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
+    if Get_ConfigValue('PreProcessing', 'batchVar1Data').lower() == 'relative':                     # Check if batchVar1_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
         with open(baseName + '.spro', 'r') as infile:                                               # Get reference value of batch variable from spro file 
             for line in infile:                                                                     # Parse spro file line by line
-                if (batchVar_Name + " = ") in line:                                                 # Search for expression for batch_VarName
-                    batchVar_DesignPoint = line.split(" ")[-1]                                      # Retrieve original batch variable value
-                    break                                                                           # Exit Loop
-            batchVar_ValuesAbs = [Decimal(i)*Decimal(batchVar_DesignPoint) for i in batchVar_Values]# Convert relative values in batchVar_ValuesAbs to absolute values                                                               
-    for item in batchVar_ValuesAbs:                                                                 # Loop over absolute batchVar_ValuesAbs which are operation points for batchVar
-        baseName_Item = baseName + '_' + str(item)
-        baseName_List.append(baseName_Item)                                                         # Create base names for new spro files, put the into a list object
-        with open(baseName + '.spro','r') as infile, open(baseName_Item + '.spro','w') as outfile:  # Replace original batch variable value in the spro file with the new value, write the new spro file
-            for line in infile:                                                                     # Parse spro file line by line
-                if (batchVar_Name + " = ") in line:                                                 # Search for expression for batch_VarName
-                    outfile.write("\t" + batchVar_Name + " = " + str(item) + "\n")                  # Replace expression for batch_VarName
-                else:
-                    outfile.write(line)                                                             # If not match batch_VarName expression just write the unmodfied line 
-    return baseName_List, batchVar_ValuesAbs
+                if (batchVar1_Name + " = ") in line:                                                # Search for expression for batch_VarName
+                    batchVar1_DesignPoint = line.split(" ")[-1]                                     # Retrieve original batch variable value
+            batchVar1_ValuesAbs = [Decimal(i)*Decimal(batchVar1_DesignPoint) for i in batchVar1_Values]# Convert relative values in batchVar1_ValuesAbs to absolute values                                                               
+    if Get_ConfigValue('PreProcessing', 'batchVar2Data').lower() == 'relative':
+        with open(baseName + '.spro', 'r') as infile: 
+            for line in infile: 
+                if (batchVar2_Name + " = ") in line:
+                    batchVar2_DesignPoint = line.split(" ")[-1]  
+            batchVar2_ValueAbs = [Decimal(i)*Decimal(batchVar2_DesignPoint) for i in batchVar2_Values]
+    baseName_Array = np.empty((len(batchVar1_ValuesAbs), len(batchVar2_ValueAbs)), dtype=object)
+    for index1, item1 in enumerate(batchVar1_ValuesAbs):                                                                 # Loop over absolute batchVar1_ValuesAbs which are operation points for batchVar1
+        for index2, item2 in enumerate(batchVar2_ValueAbs):
+            baseName_Item = baseName + '_' + str(round(item1*Decimal(9.5492))) + 'rpm_' +  str(item2) + "m3s"
+            baseName_Array[index1][index2] = baseName_Item 
+            baseName_List.append(baseName_Item)                                                         # Create base names for new spro files, put the into a list object
+            with open(baseName + '.spro','r') as infile, open(baseName_Item + '.spro','w') as outfile:  # Replace original batch variable value in the spro file with the new value, write the new spro file
+                for line in infile:                                                                     # Parse spro file line by line
+                    if (batchVar1_Name + " = ") in line:                                                 # Search for expression for batch_VarName
+                        outfile.write("\t\t" + batchVar1_Name + " = " + str(item1) + "\n")                  # Replace expression for batch_VarName
+                    elif (batchVar2_Name + " = ") in line:
+                        outfile.write("\t\t" + batchVar2_Name + " = " + str(item2) + "\n") 
+                    else:
+                        outfile.write(line)                                                             # If not match batch_VarName expression just write the unmodfied line 
+    return baseName_Array, batchVar1_ValuesAbs, batchVar2_ValueAbs
 
 def Get_FlowQuantityDescription(baseName):
     flowQOI = [item for item in Get_ConfigValue('PostProcessing','FlowQuantities').split(" ")]
@@ -68,90 +81,149 @@ def Get_FlowQuantityDescription(baseName):
                     flowQOI_Dict[item] = line.split(":")[-1]                                        # Retrieve original batch variable value
     return flowQOI, flowQOI_Dict
 
-def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_List, batchVar_ValuesAbs, avgWindow, analysis, time_elapsed):   # Function that evaluates and averages the userdefined expressions in the spro file after the CFD run
-    result_Dict = {}                                                                                # Create a dictionary that will contain all the averaged values from a CFD run
+def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed):   # Function that evaluates and averages the userdefined expressions in the spro file after the CFD run                                                                              # Create a dictionary that will contain all the averaged values from a CFD run
+    result_Dict = {}
     with open (baseName_Item + '_integrals.txt','r') as infile:                                     # Open _integrals.txt after Simerics solver run
         result_List = list(infile)                                                                  # Put results in list 
         del result_List[1:-avgWindow]                                                               # Delete everything in result list except the header row and the last n rows that will be used for averaging
         reader = csv.DictReader(result_List, delimiter="\t")                                        # Put data set in reader DictReader object, every row will be it's own dictionary
         for row in reader:                                                                          # Write values for batch variable and userdefined expressions in resultDict and average them
-            if batchVar_Name in result_Dict:                                                        # Search for batchVar_Name in result_Dict
-                result_Dict[batchVar_Name] += Decimal(batchVar_ValuesAbs[baseName_Index])           # Search for batchVar_Name in result_Dict, if exists, add value to existing value
+            if batchVar1_Name in result_Dict:                                                       # Search for batchVar1_Name in result_Dict
+                result_Dict[batchVar1_Name] += Decimal(batchVar1_ValuesAbs[baseName_Row])           # Search for batchVar1_Name in result_Dict, if exists, add value to existing value
             else:
-                result_Dict[batchVar_Name] = Decimal(batchVar_ValuesAbs[baseName_Index])            # Search for batchVar_Name in result_Dict, if not exists, set key value to batchVar_Name value
+                result_Dict[batchVar1_Name] = Decimal(batchVar1_ValuesAbs[baseName_Row])            # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
+            if batchVar2_Name in result_Dict:                                                       # Search for batchVar2_Name in result_Dict
+                result_Dict[batchVar2_Name] += Decimal(batchVar2_ValuesAbs[baseName_Index])         # Search for batchVar2_Name in result_Dict, if exists, add value to existing value
+            else:
+                result_Dict[batchVar2_Name] = Decimal(batchVar2_ValuesAbs[baseName_Index])          # Search for batchVar2_Name in result_Dict, if not exists, set key value to batchVar1_Name value
             for key, value in row.items():
                 if 'userdef.' in key:                                                               # Search for userdef expressions in result_Dict
                     if key in result_Dict:                                                           
                         result_Dict[key] += Decimal(value)                                          # Search for userdef expressions in result_Dict, if exists, add value to existing value        
                     else:
                         result_Dict[key] = Decimal(value)                                           # Search for userdef expressions in result_Dict, if not exists, set key value to userdef value
-            if 'WallClockTime' in result_Dict:                                                      # Search for batchVar_Name in result_Dict
-                result_Dict['WallClockTime'] += Decimal(time_elapsed)                               # Search for batchVar_Name in result_Dict, if exists, add value to existing value
+            if 'WallClockTime' in result_Dict:                                                      # Search for batchVar1_Name in result_Dict
+                result_Dict['WallClockTime'] += Decimal(time_elapsed)                               # Search for batchVar1_Name in result_Dict, if exists, add value to existing value
             else:
-                result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar_Name in result_Dict, if not exists, set key value to batchVar_Name value
+                result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
         for key, value in result_Dict.items():
-              result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
+            result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
     with open (baseName + '_integrals.csv', 'a+', newline='') as outfile:                             
         writer = csv.DictWriter(outfile, fieldnames=result_Dict.keys(), delimiter=",")              # Use DictWriter to write averaged results from result_Dict in CSV file
-        if baseName_Index == 0:                                                          
+        if baseName_Item == baseName_Array[0][0]:                                                        
+            outfile.truncate(0)
             writer.writeheader()                                                                    # For first CFD run also write a header row, after that, don't
         writer.writerow(result_Dict)
-    Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis)
-    
+    Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, result_Dict, analysis)
+        
 def Run_CFD(analysis, stage_components, SteadyState):                                               # Function that calls the CFD solver
     baseName = Get_ConfigValue(analysis, 'BaseName')                                                # Get base name for CFD run, depends on steady-state or transient CFD run
     avgWindow = int(Get_ConfigValue(analysis, 'AveragingWindow'))                                   # Get averaging window for post-processing, depends on steady-state or transient
+    SMP_Solver([' -save ', baseName + '.spro'])
     if Get_ConfigValue('PreProcessing', 'MeshGeometry').lower() == 'true':                          # Run meshing function if meshing was enabled in the INI file structure
-        SMP_Args = [baseName + '.spro', " -saveAs ", baseName]                                      # Create arguments for meshing run
+        SMP_Args = [baseName + '.spro', ' -saveAs', baseName]                                       # Create arguments for meshing run
         SMP_Solver(SMP_Args)                                                                        # Start Simerics meshing run
-    baseName_List, batchVar_ValuesAbs = Create_SPRO(baseName, stage_components)                     # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
-    for baseName_Index, baseName_Item in enumerate(baseName_List):                                  # Iterate through list with all operation points
-        SMP_Args = ["-run", baseName_Item + '.spro']                                                # Create arguments for solver run
-        if analysis == 'steady' and baseName_Index != 0:                                            # Continue from previous CFD results if run is steady-state analysis and not first solver run
-            SMP_Args.append(baseName_List[baseName_Index - 1] + '.sres')                            # Append arguments to start from previous steady-state CFD result
-        elif analysis == 'transient':                                                               # Start from steady-state solution if analysis type is transient
-            SMP_Args.append(SteadyState[baseName_Index] + '.sres')                                  # Append arguments to start from steady-state CFD result
-        time_elapsed = SMP_Solver(SMP_Args)                                                         # Start Simerics solver run
-        Eval_Results(baseName, baseName_Item, baseName_Index, baseName_List, batchVar_ValuesAbs, avgWindow, analysis, time_elapsed)
-    return baseName_List
+    baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs = Create_SPRO(baseName, stage_components)                     # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
+    for baseName_Row, row in enumerate(baseName_Array):
+        for baseName_Index, baseName_Item in enumerate(row):                                            # Iterate through list with all operation points
+            SMP_Args = ["-run ", baseName_Item + '.spro']                                               # Create arguments for solver run
+            if analysis == 'steady' and baseName_Index != 0:                                            # Continue from previous CFD results if run is steady-state analysis and not first solver run
+                SMP_Args.append(row[baseName_Index - 1] + '.sres')                                      # Append arguments to start from previous steady-state CFD result
+            elif analysis == 'transient':                                                               # Start from steady-state solution if analysis type is transient
+                SMP_Args.append(row[baseName_Index].replace("transient", "steady") + '.sres')           # Append arguments to start from steady-state CFD result
+            time_elapsed = SMP_Solver(SMP_Args)                                                         # Start Simerics solver run
+            Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed)
+    return baseName_Array
 
 
-def Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis):                     # Function that fills the results.html
+def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, result_Dict, analysis):                     # Function that fills the results.html
+
+    flowQOI = Get_FlowQuantityDescription(baseName)[0]
+
+    if baseName_Item == baseName_Array[0][0]:
+        with open ('__results.html','r') as infile, open('__' + baseName + '_results.html','w') as outfile:
+            data = infile.readlines()
+            for line_number, line in enumerate(data):
+                if "var batchVarName = [];" in line:
+                    outfile.write(line)
+                    index = line_number
+                    for i in range(len(flowQOI)):
+                        for j in range(baseName_Array.shape[0]):
+                            index += 1
+                            data.insert(index, "\n\t\t" + "var QOI_" + str(i + 1) + "_steady" + str(j + 1) + " = [];" + "\n\t\t" + "var QOI_" + str(i + 1) + "_transient" + str(j + 1) + " = [];")
+                
+                elif "data: QOI_" in line and "steady1" in line:
+                    outfile.write(line)
+                    template = data[line_number - 1: line_number + 11]
+                    index = line_number - 1
+                    for j in range(1, baseName_Array.shape[0]):
+                        index += 12
+                        new = [item.replace("steady1", "steady" + str(j + 1)) for item in template]
+                        new = [item.replace("transient1", "transient" + str(j + 1)) for item in new]
+                        new = [item.replace("}\n", "},\n") for item in new]
+                        for i, item in enumerate(new):
+                            if i == len(new) - 1 and j == baseName_Array.shape[0] - 1:
+                                data.insert(index + i, item.replace("},", "}"))
+                            else:
+                                data.insert(index + i, item)
+                        
+                else:
+                    outfile.write(line)
+
+    if baseName_Array.shape[0] > 1:
+        with open('__' + baseName + '_results.html','r') as infile:
+            data = infile.readlines()
+            for line_number, line in enumerate(data):
+                if "data: QOI_" in line and "_transient1" in line:
+                    data[line_number + 4] = data[line_number + 4].replace("}", "},")
+
+        with open('__' + baseName + '_results.html','w') as outfile:
+            outfile.writelines(data)
+
     HTML_Dict = {}
+
     with open (baseName + '_integrals.csv','r') as infile:
         reader = csv.DictReader(infile, delimiter=",")
         for row in reader:
-            for item in flowQuantities:
-                if item not in HTML_Dict:
-                    HTML_Dict[item] = []
-                HTML_Dict[item].append(row[item])
-            if batchVar_Name not in HTML_Dict:
-                HTML_Dict[batchVar_Name] = []
-            HTML_Dict[batchVar_Name].append(row[batchVar_Name])
-    HTML_infile = '__results.html'
-    HTML_outfile = '__results.html'
+            if row[batchVar1_Name] == str(batchVar1_ValuesAbs[baseName_Row]):
+                print("match!")
+                for item in flowQuantities:
+                    if item not in HTML_Dict:
+                        HTML_Dict[item] = []
+                    HTML_Dict[item].append(row[item])
+                if batchVar1_Name not in HTML_Dict:
+                    HTML_Dict[batchVar1_Name] = []
+                HTML_Dict[batchVar1_Name].append(row[batchVar1_Name])
+                if batchVar2_Name not in HTML_Dict:
+                    HTML_Dict[batchVar2_Name] = []
+                HTML_Dict[batchVar2_Name].append(row[batchVar2_Name])
+    
+    HTML_infile = '__' + baseName + '_results.html'
+    HTML_outfile = '__' + baseName + '_results.html'
+
     with open(HTML_infile, 'r') as infile: 
         output = []
         for line in infile.readlines():
             if "_NAME" in line:
                 flowQOI, flowQOI_Dict = Get_FlowQuantityDescription(baseName) 
-                for index,item in enumerate(flowQOI):
-                    if ("QOI_%s_NAME" % str(index+1)) in line:
+                for index, item in enumerate(flowQOI):
+                    if ("QOI_%s_NAME" % str(index + 1)) in line:
                         output.append("            <h1>%s</h1>" %item + "\n")
             elif "_DESCRIPTION" in line:
                 flowQOI, flowQOI_Dict = Get_FlowQuantityDescription(baseName) 
-                for index,item in enumerate(flowQOI):
-                    if ("QOI_%s_DESCRIPTION" % str(index+1)) in line:
+                for index, item in enumerate(flowQOI):
+                    if ("QOI_%s_DESCRIPTION" % str(index + 1)) in line:
                         output.append("            <h2>%s</h2>" %flowQOI_Dict[item] + "\n")                
             elif "<h1>SIMULATION NOT STARTED</h1>" in line:
                 output.append("			<h1>SIMULATION RUNNING ...</h1>" + "\n")
-            elif "    var QOI_" in line and analysis in line:
-                for index,item in enumerate(flowQuantities):
-                    if (str(index+1) + "_" + analysis + " = ") in line:
-                        output.append("    var QOI_" + str(index+1) + "_" + analysis + " = " + str(HTML_Dict[item]) + ";\n")
-            elif ("    var batchVarName = ") in line and analysis == 'steady':
-                output.append("    var batchVarName = " + str(HTML_Dict[batchVar_Name]) + ";\n")
-            elif ((analysis == 'steady' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'false') or (analysis == 'transient' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'true')) and (baseName_Index == (len(baseName_List) - 1)):
+            elif "var QOI_" in line and analysis + str(baseName_Row + 1) in line:
+                for index, item in enumerate(flowQuantities):
+                    if (str(index + 1) + "_" + analysis + str(baseName_Row + 1) + " = ") in line:
+                        print(line)
+                        output.append("\t\tvar QOI_" + str(index + 1) + "_" + analysis +  str(baseName_Row + 1) + " = " + str(HTML_Dict[item]) + ";\n")
+            elif ("var batchVarName = ") in line and analysis == 'steady' and baseName_Row == 0:
+                output.append("\t\tvar batchVarName = " + str(HTML_Dict[batchVar2_Name]) + ";\n")
+            elif ((analysis == 'steady' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'false') or (analysis == 'transient' and Get_ConfigValue('PreProcessing','runTransient').lower() == 'true')) and (baseName_Index == (len(baseName_Array[0]) - 1)):
                 if "<h1>SIMULATION RUNNING ...</h1>" in line:
                     output.append("			<h1>SIMULATION FINISHED</h1>" + "\n")
                 elif "		<meta http-equiv" in line:
@@ -160,6 +232,7 @@ def Write_HTML(baseName, result_Dict, baseName_Index, baseName_List, analysis): 
                     output.append(line)
             else:
                 output.append(line)
+
     with open(HTML_outfile, 'w') as outfile:
         for line in output:
             outfile.write(line)
