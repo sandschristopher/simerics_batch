@@ -60,12 +60,6 @@
     </div>
     <script>
     var batchVarName = [];
-    var QOI_1_steady = [];
-    var QOI_1_transient = [];
-    var QOI_2_steady = [];
-    var QOI_2_transient = [];
-    var QOI_3_steady = [];
-    var QOI_3_transient = [];
 
     var ctx = document.getElementById("QOI1");
     var QOI1 = new Chart(ctx, {
@@ -74,13 +68,13 @@
         labels: batchVarName,
         datasets: [
           { 
-            data: QOI_1_steady,
+            data: QOI_1_steady1,
             label: "steady-state",
             borderColor: "lightblue",
             fill: false
           },
           { 
-            data: QOI_1_transient,
+            data: QOI_1_transient1,
             label: "transient",
             borderColor: "blue",
             fill: false
@@ -95,13 +89,13 @@
         labels: batchVarName,
         datasets: [
           { 
-            data: QOI_2_steady,
+            data: QOI_2_steady1,
             label: "steady-state",
             borderColor: "lightgreen",
             fill: false
           },
           { 
-            data: QOI_2_transient,
+            data: QOI_2_transient1,
             label: "transient",
             borderColor: "green",
             fill: false
@@ -116,13 +110,13 @@
         labels: batchVarName,
         datasets: [
           { 
-            data: QOI_3_steady,
+            data: QOI_3_steady1,
             label: "steady-state",
             borderColor: "coral",
             fill: false
           },
           { 
-            data: QOI_3_transient,
+            data: QOI_3_transient1,
             label: "transient",
             borderColor: "red",
             fill: false
