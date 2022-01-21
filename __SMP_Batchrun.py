@@ -7,6 +7,7 @@ from decimal import Decimal
 import os
 import subprocess
 import time
+from re import search
 from __modify_spro import *
 
 def Get_ConfigValue(ConfigSection, ConfigKey):                                                      # Function to retrieve values from the INI file structure
@@ -15,10 +16,10 @@ def Get_ConfigValue(ConfigSection, ConfigKey):                                  
 
 CFconfig = configparser.ConfigParser()                                                              # Initialize Config
 CFconfig.read('__Runconfig.cftconf')                                                                # Read Config
-batchVar1_Name = Get_ConfigValue('PreProcessing','batchVar1')                                         # Get name of batch variable
-batchVar1_Values = Get_ConfigValue('PreProcessing','batchVar1Values').split(" ")                      # Get values for batch variable, format the as a list by splitting
-batchVar2_Name = Get_ConfigValue('PreProcessing','batchVar2')   
-batchVar2_Values = Get_ConfigValue('PreProcessing','batchVar2Values').split(" ") 
+batchVar1_Name = Get_ConfigValue('PreProcessing','rpm')                                         # Get name of batch variable
+batchVar1_Values = Get_ConfigValue('PreProcessing','rpmValues').split(" ")                      # Get values for batch variable, format the as a list by splitting
+batchVar2_Name = Get_ConfigValue('PreProcessing','flowRate')   
+batchVar2_Values = Get_ConfigValue('PreProcessing','flowRateValues').split(" ") 
 flowQuantities = ['userdef.' + item for item in Get_ConfigValue('PostProcessing','FlowQuantities').split(" ")]    # Get floq quantities for post-processing
 decimal.getcontext().prec = 9                                                                       # Set user alterable precision to 9 places e.g. 0.142857143
 
@@ -43,13 +44,15 @@ def SMP_Solver(SMP_Args):                                                       
 def Create_SPRO(baseName, stage_components):                                                        # Function to create spro files based on different batch variable values from the INI file structure
     modify_spro(baseName + '.spro', stage_components)  
     baseName_List = []                                                                              # Create empty list that will be filled with file names containing basename + operation point
-    if Get_ConfigValue('PreProcessing', 'batchVar1Data').lower() == 'relative':                     # Check if batchVar1_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
+    if Get_ConfigValue('PreProcessing', 'rpmData').lower() == 'relative':                     # Check if batchVar1_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
         with open(baseName + '.spro', 'r') as infile:                                               # Get reference value of batch variable from spro file 
             for line in infile:                                                                     # Parse spro file line by line
-                if (batchVar1_Name + " = ") in line:                                                # Search for expression for batch_VarName
+                if batchVar1_Name in line and " = " in line:                                                # Search for expression for batch_VarName
                     batchVar1_DesignPoint = line.split(" ")[-1]                                     # Retrieve original batch variable value
-            batchVar1_ValuesAbs = [Decimal(i)*Decimal(batchVar1_DesignPoint) for i in batchVar1_Values]# Convert relative values in batchVar1_ValuesAbs to absolute values                                                               
-    if Get_ConfigValue('PreProcessing', 'batchVar2Data').lower() == 'relative':
+                    # impeller_Number = search("Omega(\d) = ", line).group(1)
+                    break
+            batchVar1_ValuesAbs = [Decimal(_)*Decimal(batchVar1_DesignPoint) for _ in batchVar1_Values]# Convert relative values in batchVar1_ValuesAbs to absolute values                                                               
+    if Get_ConfigValue('PreProcessing', 'flowRateData').lower() == 'relative':
         with open(baseName + '.spro', 'r') as infile: 
             for line in infile: 
                 if (batchVar2_Name + " = ") in line:
@@ -76,6 +79,11 @@ def Get_FlowQuantityDescription(baseName):
     flowQOI_Dict = {}
     with open(baseName + '.spro','r') as infile:                                                    # Get reference value of batch variable from spro file 
         for line in infile:                                                                         # Parse spro file line by line
+            if "#plot.PC" in line:
+                impeller_Number = search("#plot.PC(\d):", line).group(1)
+                for index, item in enumerate(flowQOI):
+                    if "PC" in item:
+                        flowQOI[index] = "PC" + impeller_Number
             for item in flowQOI:
                 if ("#plot.%s:"%item) in line:                                                      # Search for expression for batch_VarName
                     flowQOI_Dict[item] = line.split(":")[-1]                                        # Retrieve original batch variable value
@@ -87,27 +95,19 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName
         result_List = list(infile)                                                                  # Put results in list 
         del result_List[1:-avgWindow]                                                               # Delete everything in result list except the header row and the last n rows that will be used for averaging
         reader = csv.DictReader(result_List, delimiter="\t")                                        # Put data set in reader DictReader object, every row will be it's own dictionary
+        result_Dict[batchVar1_Name] = Decimal(batchVar1_ValuesAbs[baseName_Row]) 
+        result_Dict[batchVar2_Name] = Decimal(batchVar2_ValuesAbs[baseName_Index])  
         for row in reader:                                                                          # Write values for batch variable and userdefined expressions in resultDict and average them
-            if batchVar1_Name in result_Dict:                                                       # Search for batchVar1_Name in result_Dict
-                result_Dict[batchVar1_Name] += Decimal(batchVar1_ValuesAbs[baseName_Row])           # Search for batchVar1_Name in result_Dict, if exists, add value to existing value
-            else:
-                result_Dict[batchVar1_Name] = Decimal(batchVar1_ValuesAbs[baseName_Row])            # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
-            if batchVar2_Name in result_Dict:                                                       # Search for batchVar2_Name in result_Dict
-                result_Dict[batchVar2_Name] += Decimal(batchVar2_ValuesAbs[baseName_Index])         # Search for batchVar2_Name in result_Dict, if exists, add value to existing value
-            else:
-                result_Dict[batchVar2_Name] = Decimal(batchVar2_ValuesAbs[baseName_Index])          # Search for batchVar2_Name in result_Dict, if not exists, set key value to batchVar1_Name value
             for key, value in row.items():
                 if 'userdef.' in key:                                                               # Search for userdef expressions in result_Dict
                     if key in result_Dict:                                                           
                         result_Dict[key] += Decimal(value)                                          # Search for userdef expressions in result_Dict, if exists, add value to existing value        
                     else:
                         result_Dict[key] = Decimal(value)                                           # Search for userdef expressions in result_Dict, if not exists, set key value to userdef value
-            if 'WallClockTime' in result_Dict:                                                      # Search for batchVar1_Name in result_Dict
-                result_Dict['WallClockTime'] += Decimal(time_elapsed)                               # Search for batchVar1_Name in result_Dict, if exists, add value to existing value
-            else:
-                result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
+        result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
         for key, value in result_Dict.items():
-            result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
+            if key != batchVar1_Name and key != batchVar2_Name and key != 'WallClockTime':
+                result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
     with open (baseName + '_integrals.csv', 'a+', newline='') as outfile:                             
         writer = csv.DictWriter(outfile, fieldnames=result_Dict.keys(), delimiter=",")              # Use DictWriter to write averaged results from result_Dict in CSV file
         if baseName_Item == baseName_Array[0][0]:                                                        
@@ -139,6 +139,8 @@ def Run_CFD(analysis, stage_components, SteadyState):                           
 def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, result_Dict, analysis):                     # Function that fills the results.html
 
     flowQOI = Get_FlowQuantityDescription(baseName)[0]
+    HTML_flowQOI = ['userdef.' + item for item in Get_FlowQuantityDescription(baseName)[0]]
+
 
     name = str(baseName.split("_")[0] + "_" + baseName.split("_")[1])
 
@@ -188,7 +190,7 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
         reader = csv.DictReader(infile, delimiter=",")
         for row in reader:
             if row[batchVar1_Name] == str(batchVar1_ValuesAbs[baseName_Row]):
-                for item in flowQuantities:
+                for item in HTML_flowQOI:
                     if item not in HTML_Dict:
                         HTML_Dict[item] = []
                     HTML_Dict[item].append(row[item])
@@ -218,7 +220,7 @@ def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_A
             elif "<h1>SIMULATION NOT STARTED</h1>" in line:
                 output.append("			<h1>SIMULATION RUNNING ...</h1>" + "\n")
             elif "var QOI_" in line and analysis + str(baseName_Row + 1) in line:
-                for index, item in enumerate(flowQuantities):
+                for index, item in enumerate(HTML_flowQOI):
                     if (str(index + 1) + "_" + analysis + str(baseName_Row + 1) + " = ") in line:
                         output.append("\t\tvar QOI_" + str(index + 1) + "_" + analysis +  str(baseName_Row + 1) + " = " + str(HTML_Dict[item]) + ";\n")
             elif ("var batchVarName = ") in line and analysis == 'steady' and baseName_Row == 0:

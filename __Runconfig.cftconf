@@ -2,22 +2,22 @@
 	Simerics = C:/Program Files/Simerics/SimericsMP.exe
 
 [PreProcessing]
-	MeshGeometry = False
+	MeshGeometry = True
 	runTransient = True
-	batchVar1 = Omega2
-	batchVar1Data = relative
-	batchVar1Values = 0.80 1.00 1.20
-	batchVar2 = vflow_out
-	batchVar2Data = relative
-	batchVar2Values = 1.00 1.20
+	rpm = Omega
+	rpmData = relative
+	rpmValues = 0.80 1.00 1.20
+	flowRate = vflow_out
+	flowRateData = relative
+	flowRateValues = 0.60 0.80 1.00 1.20 1.40
 
 [steady]
-	BaseName = AP_nq149_steady
-	AveragingWindow = 1
+	BaseName = HT_single_stage_steady
+	AveragingWindow = 50
 	
 [transient]
-	BaseName = AP_nq149_transient
+	BaseName = HT_single_stage_transient
 	AveragingWindow = 120
 
 [PostProcessing]
-	FlowQuantities = DPtt Eff_tt PC2
+	FlowQuantities = DPtt Eff_tt PC
