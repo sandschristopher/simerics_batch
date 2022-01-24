@@ -138,5 +138,3 @@ def modify_spro(spro_file):
             + CVs[-1] + "\"\n" + indent + "#plot.vOutletExtension:#volumetric flow, OutletExtension, absolute [m3/s]")
 
     return 0
-
-modify_spro("AP_nq120_steady.spro")
