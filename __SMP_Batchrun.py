@@ -49,7 +49,7 @@ def Create_SPRO(baseName, stage_components):                                    
             for line in infile:                                                                     # Parse spro file line by line
                 if batchVar1_Name in line and " = " in line:                                                # Search for expression for batch_VarName
                     batchVar1_DesignPoint = line.split(" ")[-1]                                     # Retrieve original batch variable value
-                    # impeller_Number = search("Omega(\d) = ", line).group(1)
+                    impeller_Number = search("Omega(\d) = ", line).group(1)
                     break
             batchVar1_ValuesAbs = [Decimal(_)*Decimal(batchVar1_DesignPoint) for _ in batchVar1_Values]# Convert relative values in batchVar1_ValuesAbs to absolute values                                                               
     if Get_ConfigValue('PreProcessing', 'flowRateData').lower() == 'relative':
@@ -66,8 +66,8 @@ def Create_SPRO(baseName, stage_components):                                    
             baseName_List.append(baseName_Item)                                                         # Create base names for new spro files, put the into a list object
             with open(baseName + '.spro','r') as infile, open(baseName_Item + '.spro','w') as outfile:  # Replace original batch variable value in the spro file with the new value, write the new spro file
                 for line in infile:                                                                     # Parse spro file line by line
-                    if (batchVar1_Name + " = ") in line:                                                 # Search for expression for batch_VarName
-                        outfile.write("\t\t" + batchVar1_Name + " = " + str(item1) + "\n")                  # Replace expression for batch_VarName
+                    if (batchVar1_Name + impeller_Number + " = ") in line:                                                 # Search for expression for batch_VarName
+                        outfile.write("\t\t" + batchVar1_Name + impeller_Number + " = " + str(item1) + "\n")                  # Replace expression for batch_VarName
                     elif (batchVar2_Name + " = ") in line:
                         outfile.write("\t\t" + batchVar2_Name + " = " + str(item2) + "\n") 
                     else:
