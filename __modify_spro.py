@@ -1,5 +1,5 @@
 
-def modify_spro(spro_file):
+def modify_spro(spro_file, stage_components):
 
     # Gets the mismatched grid interface names.
     MGIs = []
