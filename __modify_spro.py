@@ -1,3 +1,4 @@
+from re import search
 
 def modify_spro(spro_file, stage_components):
 
@@ -137,4 +138,14 @@ def modify_spro(spro_file, stage_components):
         insert_line(indent + "#volumetric flow, OutletExtension, absolute [m3/s]" + "\n" + indent + "plot.vOutletExtension = flow.qv@\"" \
             + CVs[-1] + "\"\n" + indent + "#plot.vOutletExtension:#volumetric flow, OutletExtension, absolute [m3/s]")
 
-    return 0
+    with open(spro_file, "r") as infile:
+        units_Dict = {}
+        desc_Dict = {}
+        data = infile.readlines()
+        for line in data:
+            if "#plot." in line:
+                key = line.split(":")[0].split(".")[1].strip()
+                units_Dict[key] = line.split(" ")[-1].strip() 
+                desc_Dict[key] = line.split("[")[0].split(":")[1].strip()
+
+    return units_Dict, desc_Dict
