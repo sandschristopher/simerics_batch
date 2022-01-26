@@ -1,5 +1,4 @@
 import numpy as np
-from shutil import copy, copyfile
 import configparser
 import csv
 import decimal
@@ -42,7 +41,7 @@ def SMP_Solver(SMP_Args):                                                       
     return time_elapsed
 
 def Create_SPRO(baseName, stage_components):                                                        # Function to create spro files based on different batch variable values from the INI file structure
-    modify_spro(baseName + '.spro', stage_components)  
+    units_Dict, desc_Dict = modify_spro(baseName + '.spro', stage_components)  
     baseName_List = []                                                                              # Create empty list that will be filled with file names containing basename + operation point
     if Get_ConfigValue('PreProcessing', 'rpmData').lower() == 'relative':                     # Check if batchVar1_ValuesAbs represent relative or absolute values, if relative values: convert to absolute values
         with open(baseName + '.spro', 'r') as infile:                                               # Get reference value of batch variable from spro file 
@@ -72,7 +71,7 @@ def Create_SPRO(baseName, stage_components):                                    
                         outfile.write("\t\t" + batchVar2_Name + " = " + str(item2) + "\n") 
                     else:
                         outfile.write(line)                                                             # If not match batch_VarName expression just write the unmodfied line 
-    return baseName_Array, batchVar1_ValuesAbs, batchVar2_ValueAbs
+    return baseName_Array, batchVar1_ValuesAbs, batchVar2_ValueAbs, units_Dict, desc_Dict, impeller_Number
 
 def Get_FlowQuantityDescription(baseName):
     flowQOI = [item for item in Get_ConfigValue('PostProcessing','FlowQuantities').split(" ")]
@@ -89,14 +88,12 @@ def Get_FlowQuantityDescription(baseName):
                     flowQOI_Dict[item] = line.split(":")[-1]                                        # Retrieve original batch variable value
     return flowQOI, flowQOI_Dict
 
-def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed):   # Function that evaluates and averages the userdefined expressions in the spro file after the CFD run                                                                              # Create a dictionary that will contain all the averaged values from a CFD run
+def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed, units_Dict, desc_Dict, impeller_Number):   # Function that evaluates and averages the userdefined expressions in the spro file after the CFD run                                                                              # Create a dictionary that will contain all the averaged values from a CFD run
     result_Dict = {}
     with open (baseName_Item + '_integrals.txt','r') as infile:                                     # Open _integrals.txt after Simerics solver run
         result_List = list(infile)                                                                  # Put results in list 
         del result_List[1:-avgWindow]                                                               # Delete everything in result list except the header row and the last n rows that will be used for averaging
         reader = csv.DictReader(result_List, delimiter="\t")                                        # Put data set in reader DictReader object, every row will be it's own dictionary
-        result_Dict[batchVar1_Name] = Decimal(batchVar1_ValuesAbs[baseName_Row]) 
-        result_Dict[batchVar2_Name] = Decimal(batchVar2_ValuesAbs[baseName_Index])  
         for row in reader:                                                                          # Write values for batch variable and userdefined expressions in resultDict and average them
             for key, value in row.items():
                 if 'userdef.' in key:                                                               # Search for userdef expressions in result_Dict
@@ -104,26 +101,45 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName
                         result_Dict[key] += Decimal(value)                                          # Search for userdef expressions in result_Dict, if exists, add value to existing value        
                     else:
                         result_Dict[key] = Decimal(value)                                           # Search for userdef expressions in result_Dict, if not exists, set key value to userdef value
-        result_Dict['WallClockTime'] = Decimal(time_elapsed)                                # Search for batchVar1_Name in result_Dict, if not exists, set key value to batchVar1_Name value
+        formatted_result_Dict = {}
+        formatted_result_Dict[batchVar1_Name] = Decimal(batchVar1_ValuesAbs[baseName_Row]) 
+        units_Dict[batchVar1_Name] = "[rad/s]"
+        desc_Dict[batchVar1_Name] = "Angular velocity, imp1"
+        formatted_result_Dict['Revolutions'] = round(float(batchVar1_ValuesAbs[baseName_Row])*9.5493)
+        units_Dict['Revolutions'] = "[rpm]"
+        desc_Dict['Revolutions'] = "Revolutions per minute, imp1"
+        formatted_result_Dict[batchVar2_Name] = Decimal(batchVar2_ValuesAbs[baseName_Index])  
+        units_Dict[batchVar2_Name] = "[m^3 s^-1]"
+        desc_Dict[batchVar2_Name] = "Outlet volumetric flux"
         for key, value in result_Dict.items():
-            if key != batchVar1_Name and key != batchVar2_Name and key != 'WallClockTime':
-                result_Dict[key] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
+            if "userdef." in key:
+                formatted_result_Dict[key[8:]] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
+        formatted_result_Dict['WallClockTime'] = Decimal(time_elapsed)  
+        units_Dict['WallClockTime'] = "[s]"
+        desc_Dict['WallClockTime'] = "Outlet volumetric flux"
+        order = [batchVar1_Name, 'Revolutions', batchVar2_Name, 'DPtt', 'DPtts', 'DPtt' + impeller_Number, 'Eff_tt', 'Eff_tts', 'Eff_tt_' + impeller_Number + '_i', 'PC' + impeller_Number, 'Torque' + impeller_Number, 'H', 'H' + impeller_Number,]
+        for var in formatted_result_Dict.keys():
+            if var not in order:
+                order.append(var)
+        order_dict = {k: formatted_result_Dict[k] for k in order}
     with open (baseName + '_integrals.csv', 'a+', newline='') as outfile:                             
-        writer = csv.DictWriter(outfile, fieldnames=result_Dict.keys(), delimiter=",")              # Use DictWriter to write averaged results from result_Dict in CSV file
+        writer = csv.DictWriter(outfile, fieldnames=order_dict.keys(), delimiter=",")              # Use DictWriter to write averaged results from result_Dict in CSV file
         if baseName_Item == baseName_Array[0][0]:                                                        
             outfile.truncate(0)
             writer.writeheader()                                                                    # For first CFD run also write a header row, after that, don't
-        writer.writerow(result_Dict)
-    Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, result_Dict, analysis)
+            writer.writerow(units_Dict)
+            writer.writerow(desc_Dict)
+        writer.writerow(formatted_result_Dict)
+    Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, analysis)
         
 def Run_CFD(analysis, stage_components, SteadyState):                                               # Function that calls the CFD solver
     baseName = Get_ConfigValue(analysis, 'BaseName')                                                # Get base name for CFD run, depends on steady-state or transient CFD run
     avgWindow = int(Get_ConfigValue(analysis, 'AveragingWindow'))                                   # Get averaging window for post-processing, depends on steady-state or transient
-    SMP_Solver([' -save ', baseName + '.spro'])
+    # SMP_Solver([' -save ', baseName + '.spro'])
     if Get_ConfigValue('PreProcessing', 'MeshGeometry').lower() == 'true':                          # Run meshing function if meshing was enabled in the INI file structure
         SMP_Args = [baseName + '.spro', ' -saveAs', baseName]                                       # Create arguments for meshing run
         SMP_Solver(SMP_Args)                                                                        # Start Simerics meshing run
-    baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs = Create_SPRO(baseName, stage_components)                     # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
+    baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, units_Dict, desc_Dict, impeller_Number= Create_SPRO(baseName, stage_components)                     # Call function to create spro files, this should be done after the meshing otherwise the mesh will be re-created on every solver
     for baseName_Row, row in enumerate(baseName_Array):
         for baseName_Index, baseName_Item in enumerate(row):                                            # Iterate through list with all operation points
             SMP_Args = ["-run ", baseName_Item + '.spro']                                               # Create arguments for solver run
@@ -132,15 +148,14 @@ def Run_CFD(analysis, stage_components, SteadyState):                           
             elif analysis == 'transient':                                                               # Start from steady-state solution if analysis type is transient
                 SMP_Args.append(row[baseName_Index].replace("transient", "steady") + '.sres')           # Append arguments to start from steady-state CFD result
             time_elapsed = SMP_Solver(SMP_Args)                                                         # Start Simerics solver run
-            Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed)
+            Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, avgWindow, analysis, time_elapsed, units_Dict, desc_Dict, impeller_Number)
     return baseName_Array
 
 
-def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, result_Dict, analysis):                     # Function that fills the results.html
+def Write_HTML(baseName, baseName_Item, baseName_Index, baseName_Row, baseName_Array, batchVar1_ValuesAbs, batchVar2_ValuesAbs, analysis):                     # Function that fills the results.html
 
     flowQOI = Get_FlowQuantityDescription(baseName)[0]
-    HTML_flowQOI = ['userdef.' + item for item in Get_FlowQuantityDescription(baseName)[0]]
-
+    HTML_flowQOI = [item for item in Get_FlowQuantityDescription(baseName)[0]]
 
     name = str(baseName.split("_")[0] + "_" + baseName.split("_")[1])
 
