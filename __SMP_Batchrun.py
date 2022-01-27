@@ -113,11 +113,17 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName
         desc_Dict[batchVar2_Name] = "Outlet volumetric flux"
         for key, value in result_Dict.items():
             if "userdef." in key:
-                formatted_result_Dict[key[8:]] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
+                if "DPtt" + impeller_Number in key:
+                    formatted_result_Dict['DPtt_imp'] = result_Dict[key] / Decimal(avgWindow)    
+                elif "Eff_tt_" + impeller_Number in key:
+                    formatted_result_Dict['Eff_tt_imp'] = result_Dict[key] / Decimal(avgWindow)    
+                else:
+                    formatted_result_Dict[key[8:]] = result_Dict[key] / Decimal(avgWindow)                              # Average values in result_Dict
         formatted_result_Dict['WallClockTime'] = Decimal(time_elapsed)  
         units_Dict['WallClockTime'] = "[s]"
         desc_Dict['WallClockTime'] = "Outlet volumetric flux"
-        order = [batchVar1_Name, 'Revolutions', batchVar2_Name, 'DPtt', 'DPtts', 'DPtt' + impeller_Number, 'Eff_tt', 'Eff_tts', 'Eff_tt_' + impeller_Number + '_i', 'PC' + impeller_Number, 'Torque' + impeller_Number, 'H', 'H' + impeller_Number,]
+        print(formatted_result_Dict)
+        order = [batchVar1_Name, 'Revolutions', batchVar2_Name, 'DPtt', 'DPtt_stage', 'DPtt_imp', 'Eff_tt', 'Eff_tt_stage', 'Eff_tt_imp', 'PC' + impeller_Number, 'Torque' + impeller_Number, 'H', 'H' + impeller_Number,]
         for var in formatted_result_Dict.keys():
             if var not in order:
                 order.append(var)

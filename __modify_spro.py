@@ -93,11 +93,11 @@ def modify_spro(spro_file, stage_components):
 
     insert_line(indent + "#head, imp1 [m]" + "\n" + indent + "plot.H = plot.DPtt" + impeller_number + "/rho/9.81 \n" + indent + "#plot.H:head, imp1 [m]")
     
-    insert_line(indent + "#delta p (t-t), stage [Pa]" + "\n" + indent + "plot.DPtts = flow.mpt@\"" \
-        + CVs[stage_components[-1]] + "\" - flow.mpt@\"" + CVs[(stage_components[0] - 1)] + "\"\n" + indent + "#plot.DPtts:delta p (t-t), stage [Pa]")
+    insert_line(indent + "#delta p (t-t), stage [Pa]" + "\n" + indent + "plot.DPtt_stage = flow.mpt@\"" \
+        + CVs[stage_components[-1]] + "\" - flow.mpt@\"" + CVs[(stage_components[0] - 1)] + "\"\n" + indent + "#plot.DPtt_stage:delta p (t-t), stage [Pa]")
     
-    insert_line(indent + "#efficiency (t-t), stage [-]" + "\n" + indent + "plot.Eff_tts = flow.q@\"" \
-        + CVs[stage_components[-1]] + "\"*plot.DPtts/rho/plot.PC" + impeller_number + "\n" + indent + "#plot.Eff_tts:efficiency (t-t), stage [-]")
+    insert_line(indent + "#efficiency (t-t), stage [-]" + "\n" + indent + "plot.Eff_tt_stage = flow.q@\"" \
+        + CVs[stage_components[-1]] + "\"*plot.DPtt_stage/rho/plot.PC" + impeller_number + "\n" + indent + "#plot.Eff_tt_stage:efficiency (t-t), stage [-]")
 
     for i in range(1, len(CVs)):
         insert_line(indent + "#delta p (t-t), CV" + str(i) + " [Pa]" + "\n" + indent + "plot.DPttCV" + str(i) + " = flow.mpt@\"" \
@@ -145,6 +145,10 @@ def modify_spro(spro_file, stage_components):
         for line in data:
             if "#plot." in line:
                 key = line.split(":")[0].split(".")[1].strip()
+                if key == "DPtt" + impeller_number:
+                    key = "DPtt_imp"
+                if key == "Eff_tt_" + impeller_number + "_i":
+                    key = "Eff_tt_imp"
                 units_Dict[key] = line.split(" ")[-1].strip() 
                 desc_Dict[key] = line.split("[")[0].split(":")[1].strip()
 
