@@ -122,7 +122,6 @@ def Eval_Results(baseName, baseName_Item, baseName_Index, baseName_Row, baseName
         formatted_result_Dict['WallClockTime'] = Decimal(time_elapsed)  
         units_Dict['WallClockTime'] = "[s]"
         desc_Dict['WallClockTime'] = "Outlet volumetric flux"
-        print(formatted_result_Dict)
         order = [batchVar1_Name, 'Revolutions', batchVar2_Name, 'DPtt', 'DPtt_stage', 'DPtt_imp', 'Eff_tt', 'Eff_tt_stage', 'Eff_tt_imp', 'PC' + impeller_Number, 'Torque' + impeller_Number, 'H', 'H' + impeller_Number,]
         for var in formatted_result_Dict.keys():
             if var not in order:
