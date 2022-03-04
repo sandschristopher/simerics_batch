@@ -173,4 +173,3 @@ def get_Dicts(spro_file):
 
     return units_Dict, desc_Dict
 
-modify_spro("CRDF_v01_transient_8000rpm_1-25m3s.spro", [1, 2])
